@@ -60,11 +60,15 @@ metered_BOA_removed <- metered_BOA_removed %>% mutate(LF = GEN_MW/capacity)
 metered_BOA_removed <- metered_BOA_removed %>% 
   mutate(Weighting = (seq(1, nrow(metered_BOA_removed)))/nrow(metered_BOA_removed))
 
+#set up connection args to DEAF
+connection_args <-  list("DEAFP", "tde", "control1")
+
 ## Acquire existing physical model parameters
 ## create sqlquery
 query_PM_parameters <- "select 
 GTM.GEN_ID, 
 wg.gen_name,
+wg.gen_full_name,
 GTM.TRBNE_ID, 
 TT.SCALE, 
 TT.MULT, 
@@ -79,7 +83,7 @@ query_PM_parameters <- gsub("Gen_id", Gen_id, query_PM_parameters)
 query_PM_parameters <- gsub("\n", " ", query_PM_parameters)
 
 #obtain existing parameters for a GEN_ID
-existing_PM_parameters <- sqlQuery(EFS, query_PM_parameters)
+existing_PM_parameters <- tbl_df(RODBC_query(sqlQuery(EFS, query_PM_parameters)))
 
 s <- NA
 s[1] <- existing_PM_parameters$SCALE
@@ -188,7 +192,7 @@ h <-   ggplot(metered_BOA_removed, aes(x=GEN_MW))+ geom_histogram(binwidth=1, co
 geom_vline(aes(xintercept=capacity), color="red", linetype="dashed", size=1) +
   ggtitle(paste0("MW Values, Red line is Capacity"))
 
-p6 <- grid.arrange(g, h, top = paste0("Gen_id = ", Gen_id, ",  Gen_Name = ", existing_PM_parameters$GEN_NAME), widths = c(2, 1))
+p6 <- grid.arrange(g, h, top = paste0("Gen_id = ", Gen_id, ",  Gen_Name = ", Gen_name, ",  Gen_Name = ", gen_full_name ,existing_PM_parameters$GEN_NAME), widths = c(2, 1))
 
 
 
