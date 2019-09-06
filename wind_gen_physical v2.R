@@ -83,7 +83,8 @@ query_PM_parameters <- gsub("Gen_id", Gen_id, query_PM_parameters)
 query_PM_parameters <- gsub("\n", " ", query_PM_parameters)
 
 #obtain existing parameters for a GEN_ID
-existing_PM_parameters <- tbl_df(RODBC_query(sqlQuery(EFS, query_PM_parameters)))
+existing_PM_parameters <- tbl_df(RODBC_query(connection_args, query_PM_parameters))
+
 
 s <- NA
 s[1] <- existing_PM_parameters$SCALE
@@ -142,12 +143,30 @@ mod_w <- nls(LF ~ 1*SCALE/(1 + MULT*exp(-SENS*WS)),
             data = metered_BOA_removed, 
             start = list(SCALE = 0.9,MULT = 250, SENS = 0.7), weights=Weighting^3)
 
+# relate weights to times
+
+x <- seq(0, 10, by =0.1)
+amp <- 1
+decay <- .5
+z <- amp *exp(-x*decay)*(cos(2*pi*x))
+
+z[z < 0] <- 0
+
+test <- tibble("x" = x, "z"= z)
+
+
+plot(test$x, y = test$z, type = "l")
+
+ggplot(test, aes(x = x)) +
+  geom_line(aes(y = z, colour = "z"))
+
+
 
 # define esp equation
 power_curve <- function(p, w) {s[1]/(1+s[2]*exp(-s[3]*w)) }
 
 ## use 2 models and defined equation(with existing parameters) to make dataframe
-new_d1 <- data_frame(WS = seq(0, 28, by = 0.1))
+new_d1 <- tibble(WS = seq(0, 28, by = 0.1))
 new_d1 <- new_d1 %>%  mutate(nls_w = predict(mod_w, new_d1)) %>%
                       mutate(exist = power_curve(s, new_d1$WS))
 
