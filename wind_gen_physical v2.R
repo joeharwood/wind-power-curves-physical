@@ -46,7 +46,7 @@ for(i in 1:length(files_name_only)){
   tryCatch({
 ## assign gen_id to i
 Gen_id <- files_name_only[i]
-
+Gen_id <- 1
 ## obtain historic data
 metered_BOA_removed <- readRDS(paste0(root_dir, "/Historic_data/wind_id_", Gen_id, ".RDS"))
 
@@ -54,11 +54,32 @@ metered_BOA_removed <- readRDS(paste0(root_dir, "/Historic_data/wind_id_", Gen_i
 capacity <- unique(metered_BOA_removed$capacity)
 
 ##create load factor
-metered_BOA_removed <- metered_BOA_removed %>% mutate(LF = GEN_MW/capacity)
+metered_BOA_removed <- metered_BOA_removed %>% mutate(LF = GEN_MW/capacity) %>% arrange(desc(datetime))
 
 ## Adding a Weighting column with higher values given to more recent dates
 metered_BOA_removed <- metered_BOA_removed %>% 
-  mutate(Weighting = (seq(1, nrow(metered_BOA_removed)))/nrow(metered_BOA_removed))
+  mutate(Weighting = (seq(nrow(metered_BOA_removed), 1)))
+
+metered_BOA_removed <- metered_BOA_removed %>% 
+  mutate(Weighting_int = seq(0, (nrow(metered_BOA_removed)-1)*0.01, by = 0.01))
+
+metered_BOA_removed <- metered_BOA_removed %>% 
+  mutate(Weighting_int_inv = seq((nrow(metered_BOA_removed)-1)*0.01, 0 ,by = -0.01))
+
+metered_BOA_removed <- metered_BOA_removed %>% 
+  mutate(Weighting_int_recp = Weighting_int_inv/max(metered_BOA_removed$Weighting_int))
+
+metered_BOA_removed <- metered_BOA_removed %>% 
+  mutate(Weighting_int_recp_inv = Weighting_int/max(metered_BOA_removed$Weighting_int))
+
+metered_BOA_removed$decay_sine <- exp(-0.002*metered_BOA_removed$Weighting_int)*cos((2*pi*metered_BOA_removed$Weighting_int)/365)
+
+#test <- test %>% mutate(y = replace(y, y <= 0, 0))
+metered_BOA_removed <- metered_BOA_removed %>% mutate(rep0 = replace(decay_sine, decay_sine <= 0, 0))
+
+ggplot(metered_BOA_removed, aes(x=datetime))+
+  geom_line(aes(y=Weighting_int_recp, colour = "Weighting_int_recp"))+
+  geom_line(aes(y=rep0, colour = "rep0"))
 
 #set up connection args to DEAF
 connection_args <-  list("DEAFP", "tde", "control1")
@@ -142,25 +163,6 @@ cut_off <- 24
 mod_w <- nls(LF ~ 1*SCALE/(1 + MULT*exp(-SENS*WS)), 
             data = metered_BOA_removed, 
             start = list(SCALE = 0.9,MULT = 250, SENS = 0.7), weights=Weighting^3)
-
-# relate weights to times
-
-x <- seq(0, 10, by =0.1)
-amp <- 1
-decay <- .5
-z <- amp *exp(-x*decay)*(cos(2*pi*x))
-
-z[z < 0] <- 0
-
-test <- tibble("x" = x, "z"= z)
-
-
-plot(test$x, y = test$z, type = "l")
-
-ggplot(test, aes(x = x)) +
-  geom_line(aes(y = z, colour = "z"))
-
-
 
 # define esp equation
 power_curve <- function(p, w) {s[1]/(1+s[2]*exp(-s[3]*w)) }
